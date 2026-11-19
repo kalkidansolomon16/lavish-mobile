@@ -231,6 +231,10 @@ class AppointmentScreen extends StatelessWidget {
                   ]),
                 ),
               ],
+              if (status == 'pending' && a['change_request'] is Map) ...[
+                const SizedBox(height: 12),
+                ChangeRequestCard(a: a, onChanged: reload),
+              ],
               if (!['declined', 'cancelled'].contains(status)) ...[
                 const SizedBox(height: 12),
                 LvCard(child: Steps(steps: [for (final (t, at, done) in steps) StepItem(t, done ? (at.isEmpty ? '' : when(at)) : '', done)])),
@@ -346,4 +350,180 @@ class _ReviewSheetState extends State<_ReviewSheet> {
           LvButton('Send review', onTap: () => Navigator.pop(context, (rating, comment.text.trim()))),
         ]),
       );
+}
+
+
+/// Reception asked the client to change a pending booking (the doctor is busy): suggested times / doctors, or pick any
+/// free time. POST /client/appointments/{id}/change.
+class ChangeRequestCard extends StatefulWidget {
+  const ChangeRequestCard({super.key, required this.a, required this.onChanged});
+  final Json a;
+  final Future<void> Function() onChanged;
+  @override
+  State<ChangeRequestCard> createState() => _ChangeRequestCardState();
+}
+
+class _ChangeRequestCardState extends State<ChangeRequestCard> {
+  bool busy = false;
+
+  Json get cr => Map<String, dynamic>.from(widget.a['change_request'] as Map);
+
+  static String _day(String ymd) {
+    final d = DateTime.tryParse(ymd);
+    if (d == null) return ymd;
+    const wd = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const mo = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${wd[d.weekday - 1]} ${d.day} ${mo[d.month - 1]}';
+  }
+
+  Future<void> _change(Map<String, dynamic> body, String what) async {
+    final ok = await confirm(context, title: 'Change your booking?', body: '$what\nReception will confirm it and let you know.', ok: 'Change');
+    if (!ok || !mounted) return;
+    setState(() => busy = true);
+    try {
+      await api.post('/client/appointments/${widget.a['id']}/change', body);
+      if (mounted) toast(context, 'Booking changed — waiting for confirmation');
+      await widget.onChanged();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _pickTime() async {
+    final a = widget.a;
+    final picked = await showModalBottomSheet<(String, String)>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => _TimePicker(serviceId: a.obj('service')['id'] as int?, doctorId: a.objOrNull('doctor')?['id'] as int?, branchId: a.objOrNull('branch')?['id'] as int?),
+    );
+    if (picked != null && mounted) await _change({'date': picked.$1, 'time': picked.$2}, 'New time: ${_day(picked.$1)} at ${picked.$2}');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final kind = cr.str('kind');
+    final times = cr.list('times');
+    final doctors = cr.list('doctors');
+    final doctorName = widget.a.objOrNull('doctor')?.str('name') ?? 'Your doctor';
+    final ask = switch (kind) { 'time' => 'Choose another time.', 'doctor' => 'Choose another doctor.', _ => 'Choose another time or another doctor.' };
+    return LvCard(
+      color: const Color(0xFFFDF6EA),
+      borderColor: const Color(0xFFF0DCB5),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Row(children: [
+          Icon(Icons.event_repeat_rounded, color: Color(0xFF8A5A12)),
+          SizedBox(width: 8),
+          Expanded(child: Text('Please change your booking', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF8A5A12)))),
+        ]),
+        const SizedBox(height: 6),
+        Text('$doctorName isn’t available at ${widget.a.str('time')} on ${_day(widget.a.str('date'))}. $ask', style: const TextStyle(fontSize: 13.5, height: 1.4)),
+        if (cr.str('message').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text('“${cr.str('message')}”', style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic))),
+        if (times.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          const Muted('Free times', size: 12),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final t in times)
+              ActionChip(
+                label: Text('${_day(t.str('date'))} · ${t.str('time')}'),
+                onPressed: busy ? null : () => _change({'date': t.str('date'), 'time': t.str('time')}, 'New time: ${_day(t.str('date'))} at ${t.str('time')}'),
+              ),
+          ]),
+        ],
+        if (doctors.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Muted('Doctors free at ${widget.a.str('time')}', size: 12),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final d in doctors)
+              ActionChip(
+                avatar: const Icon(Icons.person_outline_rounded, size: 18),
+                label: Text(d.str('name')),
+                onPressed: busy ? null : () => _change({'doctor_id': d['id']}, 'New doctor: ${d.str('name')} (same time)'),
+              ),
+          ]),
+        ],
+        if (kind != 'doctor') ...[
+          const SizedBox(height: 12),
+          LvButton('Pick another time', icon: Icons.schedule_rounded, kind: BtnKind.ghost, busy: busy, onTap: _pickTime),
+        ],
+      ]),
+    );
+  }
+}
+
+/// Bottom sheet: pick a date and one of the free times (GET /catalog/availability).
+class _TimePicker extends StatefulWidget {
+  const _TimePicker({required this.serviceId, this.doctorId, this.branchId});
+  final int? serviceId;
+  final int? doctorId;
+  final int? branchId;
+  @override
+  State<_TimePicker> createState() => _TimePickerState();
+}
+
+class _TimePickerState extends State<_TimePicker> {
+  DateTime date = DateTime.now().add(const Duration(days: 1));
+  List<Json>? slots;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => slots = null);
+    try {
+      final r = dataOf(await api.get('/catalog/availability', {
+        'service_id': widget.serviceId,
+        'date': ymd(date),
+        'doctor_id': widget.doctorId,
+        'branch_id': widget.doctorId == null ? widget.branchId : null,
+      }));
+      if (mounted) setState(() => slots = r.list('slots'));
+    } catch (_) {
+      if (mounted) setState(() => slots = []);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final free = (slots ?? const <Json>[]).where((x) => x['available'] == true).toList();
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Pick another time', style: serif(22)),
+          const SizedBox(height: 10),
+          LvTile(
+            icon: Icons.calendar_month_outlined,
+            title: dayLong(date.toIso8601String()),
+            subtitle: 'Tap to choose another day',
+            onTap: () async {
+              final now = DateTime.now();
+              final d = await showDatePicker(context: context, firstDate: now, lastDate: now.add(const Duration(days: 60)), initialDate: date);
+              if (d != null) {
+                date = d;
+                _load();
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          if (slots == null)
+            const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: C.dark)))
+          else if (free.isEmpty)
+            const Muted('No free times this day — try another day.')
+          else
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final sl in free) ActionChip(label: Text(sl.str('time')), onPressed: () => Navigator.pop(context, (ymd(date), sl.str('time')))),
+            ]),
+        ]),
+      ),
+    );
+  }
 }

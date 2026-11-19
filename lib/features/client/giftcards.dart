@@ -186,9 +186,9 @@ class GiftCardScreen extends StatelessWidget {
               const SizedBox(height: 14),
               LvCard(
                 child: Column(children: [
-                  Muted(c.str('status') == 'active' ? 'Show this at the Lavish front desk' : 'The card’s barcode (works once it is activated)', size: 12.5),
+                  Muted(c.str('status') == 'active' ? 'Show this at the Lavish front desk' : 'The card’s QR code (works once it is activated)', size: 12.5),
                   const SizedBox(height: 10),
-                  BarcodeWidget(barcode: Barcode.code128(), data: c.str('code').replaceAll(RegExp(r'[^A-Za-z0-9]'), ''), height: 70, drawText: false),
+                  BarcodeWidget(barcode: Barcode.qrCode(), data: c.str('code').replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase(), width: 170, height: 170, drawText: false),
                   const SizedBox(height: 8),
                   Text(c.str('code'), style: const TextStyle(fontFamily: 'monospace', letterSpacing: 2, fontSize: 16, fontWeight: FontWeight.w600)),
                 ]),
