@@ -32,7 +32,8 @@ class Api {
   Api._() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiUrl,
-      connectTimeout: const Duration(seconds: 15),
+      // Short connect timeout + automatic retries (see _send): a connection that never opened is safe to retry.
+      connectTimeout: const Duration(seconds: 8),
       receiveTimeout: const Duration(seconds: 30),
       headers: {'Accept': 'application/json'},
     ));
@@ -89,23 +90,42 @@ class Api {
 
   /// Multipart upload. [files] maps field name → list of (bytes, filename).
   Future<dynamic> upload(String path, Map<String, dynamic> fields, Map<String, List<UploadFile>> files) {
-    final form = FormData();
-    fields.forEach((k, v) {
-      if (v != null) form.fields.add(MapEntry(k, v.toString()));
-    });
-    files.forEach((field, list) {
-      for (final f in list) {
-        form.files.add(MapEntry(field, MultipartFile.fromBytes(f.bytes, filename: f.name)));
-      }
-    });
-    return _send(() => _dio.post(path, data: form));
+    // The form is built inside the call so a retry sends a fresh copy (a sent FormData can't be reused).
+    FormData build() {
+      final form = FormData();
+      fields.forEach((k, v) {
+        if (v != null) form.fields.add(MapEntry(k, v.toString()));
+      });
+      files.forEach((field, list) {
+        for (final f in list) {
+          form.files.add(MapEntry(field, MultipartFile.fromBytes(f.bytes, filename: f.name)));
+        }
+      });
+      return form;
+    }
+
+    return _send(() => _dio.post(path, data: build()));
   }
 
   Map<String, dynamic>? _clean(Map<String, dynamic>? q) => q == null ? null : (Map.of(q)..removeWhere((k, v) => v == null || v == ''));
 
+  /// Connections that fail before anything is sent (timeout / refused / dropped while connecting) are retried twice —
+  /// some networks and servers drop a share of new connections. Requests that reached the server are never repeated.
+  Future<Response> _withRetry(Future<Response> Function() call) async {
+    for (var attempt = 1;; attempt++) {
+      try {
+        return await call();
+      } on DioException catch (e) {
+        final notSent = e.response == null && (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.connectionError);
+        if (!notSent || attempt >= 3) rethrow;
+        await Future<void>.delayed(Duration(milliseconds: 400 * attempt));
+      }
+    }
+  }
+
   Future<dynamic> _send(Future<Response> Function() call) async {
     try {
-      final res = await call();
+      final res = await _withRetry(call);
       return res.data;
     } on DioException catch (e) {
       final r = e.response;

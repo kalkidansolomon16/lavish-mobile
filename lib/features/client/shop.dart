@@ -485,6 +485,32 @@ class OrderScreen extends StatelessWidget {
                 Banner2(tone: Tone.bad, icon: Icons.cancel_outlined, text: Text('This order was cancelled${o.str('cancel_reason').isNotEmpty ? ': ${o.str('cancel_reason')}' : '.'}'))
               else
                 LvCard(child: Steps(steps: [for (final t in o.list('timeline')) StepItem(t.str('title'), t.str('at').isEmpty ? '' : when(t.str('at')), t.str('at').isNotEmpty)])),
+              if (o.flag('can_confirm_received')) ...[
+                const SizedBox(height: 12),
+                LvCard(
+                  color: const Color(0xFFF2F8F7),
+                  borderColor: C.mint,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('Has your order arrived?', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    const Muted('When you have the products in your hands, let us know so we can close the delivery.', size: 12.5),
+                    const SizedBox(height: 10),
+                    LvButton('I received my order', icon: Icons.inventory_2_outlined, onTap: () async {
+                      if (!await confirm(context, title: 'Did you receive your order?', body: 'Only confirm once the products are in your hands.', ok: 'Yes, I received it')) return;
+                      try {
+                        await api.post('/client/orders/${o['id']}/received');
+                        if (context.mounted) toast(context, 'Thank you! Lavish will confirm the delivery.');
+                        await reload();
+                      } catch (e) {
+                        if (context.mounted) showError(context, e);
+                      }
+                    }),
+                  ]),
+                ),
+              ] else if (o.str('received_at').isNotEmpty && o.str('status') != 'delivered') ...[
+                const SizedBox(height: 12),
+                Banner2(icon: Icons.check_circle_outline_rounded, text: Text('You confirmed you received it ${when(o.str('received_at'))}. Lavish will close the delivery.')),
+              ],
               if (o.objOrNull('courier') != null) ...[
                 const SizedBox(height: 12),
                 LvCard(

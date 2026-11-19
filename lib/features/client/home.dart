@@ -89,6 +89,7 @@ class HomeScreen extends StatelessWidget {
       safe(api.get('/catalog/services', {'online': 0})),
       safe(api.get('/catalog/products', {'in_stock': 1, 'per_page': 6})),
       safe(api.get('/client/rewards')),
+      safe(api.get('/client/payments')),
     ]);
     session.refreshUnread();
     final upcoming = listOf(r[0])..sort((a, b) => a.str('starts_at').compareTo(b.str('starts_at')));
@@ -100,6 +101,7 @@ class HomeScreen extends StatelessWidget {
       'services': listOf(r[4]),
       'products': listOf(r[5]),
       'rewards': r[6] == null ? null : dataOf(r[6]),
+      'owed': r[7] is Map && (r[7] as Map)['meta'] is Map ? (((r[7] as Map)['meta'] as Map)['outstanding'] as num?)?.toInt() ?? 0 : 0,
     };
   }
 
@@ -157,6 +159,19 @@ class HomeScreen extends StatelessWidget {
                   Transform.translate(
                     offset: const Offset(0, -28),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      if ((d['owed'] as int? ?? 0) > 0) ...[
+                        Banner2(
+                          tone: Tone.warn,
+                          icon: Icons.payments_outlined,
+                          onTap: () => context.push('/payments'),
+                          trailing: const Icon(Icons.chevron_right_rounded, color: C.warnInk),
+                          text: Text.rich(TextSpan(children: [
+                            TextSpan(text: 'You have ${etb(d['owed'] as int)} to pay', style: const TextStyle(fontWeight: FontWeight.w600)),
+                            const TextSpan(text: ' — pay at reception or upload your receipt.'),
+                          ])),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
                       if (rw != null) _RewardsStrip(rw: rw),
                       const TodayMedicinesCard(),
                       if ((d['pending'] as int) > 0) ...[
