@@ -14,16 +14,19 @@ Future<void> main() async {
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(statusBarColor: Colors.transparent));
   runApp(const LavishApp());
 
-  // Phone notifications: medicine reminders + updates (booking approved, payment received…).
-  await reminders.init();
-  await PushService.init();
   void open(String? payload) {
     if (payload == null || payload.isEmpty) return;
     router.push(payload == 'reminders' ? '/reminders' : payload);
   }
 
-  reminders.onOpen = open;
-  PushService.onOpen = open;
+  // Phone notifications (medicine reminders, updates, Firebase) are optional extras: they must never stop the
+  // app from opening. Each step is guarded and time-limited; sign-in starts right away in parallel.
+  final notificationsReady = () async {
+    await _safely('reminders', reminders.init);
+    await _safely('push', PushService.init);
+    reminders.onOpen = open;
+    PushService.onOpen = open;
+  }();
 
   var wasIn = false;
   var wasClient = false;
@@ -31,20 +34,31 @@ Future<void> main() async {
     final signedIn = session.status == AuthStatus.signedIn && !session.mustChangePassword;
     final isClient = signedIn && session.isClient;
     if (signedIn && !wasIn) {
-      InboxAlerts.start();
-      PushService.register();
-      reminders.launchPayload().then(open); // opened by tapping one of our notifications
+      _safely('inbox', InboxAlerts.start);
+      notificationsReady.then((_) {
+        _safely('push register', PushService.register);
+        reminders.launchPayload().then(open).catchError((_) {}); // opened by tapping one of our notifications
+      });
     }
     if (!signedIn && wasIn) {
       InboxAlerts.reset();
-      PushService.unregister();
+      _safely('push unregister', PushService.unregister);
     }
-    if (isClient && !wasClient) reminders.sync();
-    if (!isClient && wasClient) reminders.clear();
+    if (isClient && !wasClient) notificationsReady.then((_) => _safely('reminders sync', reminders.sync));
+    if (!isClient && wasClient) _safely('reminders clear', reminders.clear);
     wasIn = signedIn;
     wasClient = isClient;
   });
   await session.start();
+}
+
+/// Runs an optional start-up step; a failure or a hang (20 s) is logged and ignored.
+Future<void> _safely(String what, Future<void> Function() step) async {
+  try {
+    await step().timeout(const Duration(seconds: 20));
+  } catch (e) {
+    debugPrint('Lavish: $what skipped — $e');
+  }
 }
 
 class LavishApp extends StatefulWidget {

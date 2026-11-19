@@ -54,9 +54,14 @@ class Api {
 
   Future<void> loadToken() async {
     try {
-      token = await _storage.read(key: _key);
+      // Saved data restored from an old install can make secure storage hang or fail: give up after 5 s,
+      // forget it and show the sign-in screens instead of the splash forever.
+      token = await _storage.read(key: _key).timeout(const Duration(seconds: 5));
     } catch (_) {
       token = null;
+      try {
+        await _storage.deleteAll().timeout(const Duration(seconds: 5));
+      } catch (_) {}
     }
   }
 

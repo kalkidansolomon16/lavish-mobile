@@ -27,8 +27,18 @@ class Session extends ChangeNotifier {
 
   /// App start: load the saved token and config, then GET /auth/me.
   Future<void> start() async {
+    try {
+      await _start();
+    } catch (_) {
+      // Never leave the app on the splash screen: anything unexpected → the sign-in screens.
+      if (status == AuthStatus.unknown) status = api.token != null && user != null ? AuthStatus.signedIn : AuthStatus.signedOut;
+    }
+    notifyListeners();
+  }
+
+  Future<void> _start() async {
     await api.loadToken();
-    await loadConfig();
+    await loadConfig().timeout(const Duration(seconds: 20), onTimeout: () {});
     if (api.token == null) {
       status = AuthStatus.signedOut;
     } else {
@@ -48,7 +58,6 @@ class Session extends ChangeNotifier {
         }
       }
     }
-    notifyListeners();
   }
 
   Future<void> loadConfig() async {
