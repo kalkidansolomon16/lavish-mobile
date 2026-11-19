@@ -61,6 +61,7 @@ class GiftCardArt extends StatelessWidget {
 
 /// Friendly status words for a card.
 String cardStatus(Json c) => switch (c.str('status')) {
+      'pending_payment' when c.str('payment_status') == 'in_review' => 'Receipt being checked',
       'active' => 'Active',
       'awaiting_activation' => 'Waiting for Lavish to activate',
       'pending_payment' => 'Not paid yet',
@@ -178,7 +179,12 @@ class GiftCardScreen extends StatelessWidget {
                   ? 'Paid — thank you! Lavish is checking the card and will activate it. ${c.obj('recipient').str('name', 'The recipient')} then gets it by ${c.obj('recipient').str('email').isNotEmpty ? 'email' : 'SMS'} with the dates it can be used.'
                   : 'This card is paid and waiting for Lavish to activate it.')),
             ],
-            if (c.str('status') == 'pending_payment' && c['payment_id'] != null) ...[
+            if (c.str('status') == 'pending_payment' && c.str('payment_status') == 'in_review') ...[
+              const SizedBox(height: 14),
+              Banner2(tone: Tone.gold, icon: Icons.hourglass_top_rounded, text: const Text('We received your payment receipt. Lavish is checking it, then activates the card and sends it to the recipient.')),
+              const SizedBox(height: 8),
+              LvButton('View payment', kind: BtnKind.ghost, icon: Icons.receipt_long_outlined, onTap: () => context.push('/pay/${c['payment_id']}')),
+            ] else if (c.str('status') == 'pending_payment' && c['payment_id'] != null) ...[
               const SizedBox(height: 14),
               LvButton('Pay for this card', icon: Icons.payments_outlined, onTap: () => context.push('/pay/${c['payment_id']}')),
             ],

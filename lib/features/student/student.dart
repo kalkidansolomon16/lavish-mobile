@@ -280,6 +280,7 @@ class MyCourseScreen extends StatelessWidget {
           final e = d.obj('enrollment');
           final course = e.obj('course');
           final modules = d.list('modules');
+          final locked = d['locked'] == true;
           return Scaffold(
             appBar: lvAppBar(context, course.str('title'), subtitle: '${e.integer('progress')}% complete'),
             body: ListView(padding: const EdgeInsets.fromLTRB(20, 4, 20, 30), children: [
@@ -293,6 +294,26 @@ class MyCourseScreen extends StatelessWidget {
                   Expanded(child: LvButton('Certificate', icon: Icons.workspace_premium_rounded, kind: BtnKind.gold, onTap: () => context.push('/certificate/${e['id']}'))),
                 ],
               ]),
+              if (locked) ...[
+                const SizedBox(height: 14),
+                LvCard(
+                  color: const Color(0xFFFDF6EA),
+                  borderColor: const Color(0xFFF0DCB5),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Icon(Icons.lock_outline_rounded, color: Color(0xFF8A5A12)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('Lessons are locked', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF8A5A12))),
+                        const SizedBox(height: 4),
+                        Text(d.str('locked_reason'), style: const TextStyle(fontSize: 13, height: 1.4)),
+                        if (d.integer('modules_published') > 0)
+                          Padding(padding: const EdgeInsets.only(top: 4), child: Muted('${d.integer('modules_published')} lesson(s) are ready and waiting for you.', size: 12.5)),
+                      ]),
+                    ),
+                  ]),
+                ),
+              ],
               if (d.list('upcoming_sessions').isNotEmpty) ...[
                 const SectionTitle('Next classes'),
                 LvList(children: [

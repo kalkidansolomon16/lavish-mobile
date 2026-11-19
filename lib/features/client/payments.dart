@@ -510,27 +510,69 @@ class _ReceiptPicker extends StatelessWidget {
       );
     }
     final pdf = (name ?? '').toLowerCase().endsWith('.pdf');
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: Stack(children: [
-        if (pdf)
-          Container(
-            height: 90,
-            color: Colors.white,
-            padding: const EdgeInsets.all(16),
-            child: Row(children: [const IconBox(Icons.picture_as_pdf_rounded, tone: Tone.bad), const SizedBox(width: 12), Expanded(child: Text(name ?? 'receipt.pdf', overflow: TextOverflow.ellipsis))]),
-          )
-        else
-          Image.memory(bytes!, height: 200, width: double.infinity, fit: BoxFit.cover),
-        Positioned(
-          right: 10,
-          top: 10,
+    // A framed "Your receipt" card: the buttons sit in a header bar and the whole photo is shown (not cropped),
+    // so the picture can't be mistaken for part of the payment form.
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: C.line)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+          color: const Color(0xFFF2F8F7),
           child: Row(children: [
+            const Icon(Icons.receipt_long_rounded, size: 18, color: C.tealDeep),
+            const SizedBox(width: 8),
+            const Expanded(child: Text('Your receipt', style: TextStyle(fontWeight: FontWeight.w600, color: C.tealDeep))),
             _Chip('Change', onPick),
             const SizedBox(width: 6),
             _Chip('Remove', onClear, danger: true),
           ]),
         ),
+        if (pdf)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(children: [const IconBox(Icons.picture_as_pdf_rounded, tone: Tone.bad), const SizedBox(width: 12), Expanded(child: Text(name ?? 'receipt.pdf', overflow: TextOverflow.ellipsis))]),
+          )
+        else
+          GestureDetector(
+            onTap: () => showDialog(
+              context: context,
+              builder: (c) => Dialog(
+                insetPadding: const EdgeInsets.all(12),
+                backgroundColor: Colors.black,
+                child: Stack(children: [
+                  InteractiveViewer(child: Center(child: Image.memory(bytes!, fit: BoxFit.contain))),
+                  Positioned(right: 4, top: 4, child: IconButton(icon: const Icon(Icons.close_rounded, color: Colors.white), onPressed: () => Navigator.pop(c))),
+                ]),
+              ),
+            ),
+            child: Container(
+              height: 220,
+              color: const Color(0xFFEFEEEC),
+              padding: const EdgeInsets.all(8),
+              child: Stack(children: [
+                Positioned.fill(child: Image.memory(bytes!, fit: BoxFit.contain)),
+                Positioned(
+                  right: 6,
+                  bottom: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.black.withValues(alpha: .55), borderRadius: BorderRadius.circular(99)),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.zoom_in_rounded, size: 14, color: Colors.white),
+                      SizedBox(width: 4),
+                      Text('Tap to view', style: TextStyle(color: Colors.white, fontSize: 11)),
+                    ]),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        if (!pdf)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(14, 8, 14, 10),
+            child: Text('Make sure the amount, date and transaction number are readable.', style: TextStyle(color: C.muted, fontSize: 12)),
+          ),
       ]),
     );
   }

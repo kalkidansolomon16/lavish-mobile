@@ -53,7 +53,7 @@ class RewardsScreen extends StatelessWidget {
                 reload();
               });
             }
-            if (rw['member'] != true) return _JoinView(giftTotal: giftTotal);
+            if (rw['member'] != true) return _JoinView(giftTotal: giftTotal, rw: rw, onChanged: reload);
             final tier = rw.obj('tier');
             final held = rw.integer('held_points');
             final openReq = rw.integer('open_requests');
@@ -265,36 +265,72 @@ String _ruleTitle(String t) => switch (t) {
       _ => 'Bonus',
     };
 
-/// Not a member: Lavish Rewards is joined at the front desk (reception enrols the clients who want it).
-class _JoinView extends StatelessWidget {
-  const _JoinView({required this.giftTotal});
+/// Not a member yet: ask to join in the app (reception enrols you) or at the front desk.
+class _JoinView extends StatefulWidget {
+  const _JoinView({required this.giftTotal, required this.rw, required this.onChanged});
   final int giftTotal;
+  final Json rw;
+  final Future<void> Function() onChanged;
   @override
-  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(20), children: [
-        TealHeader(
-          radius: 24,
-          padding: const EdgeInsets.all(22),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Icon(Icons.workspace_premium_rounded, color: C.gold, size: 36),
-            const SizedBox(height: 12),
-            Text('Lavish Rewards', style: serif(30, color: Colors.white)),
-            const SizedBox(height: 6),
-            const Text('Collect points on your treatments and shop orders, and use them for a discount. Joining is free — ask at the Lavish front desk and reception will enrol you.',
-                style: TextStyle(color: C.mint, height: 1.5)),
-          ]),
-        ),
-        const SizedBox(height: 20),
-        for (final (i, t, s) in [
-          (Icons.storefront_outlined, 'Ask at reception', 'Tell the front desk you’d like to join on your next visit'),
-          (Icons.stars_rounded, 'Collect points', 'On every completed, paid treatment and shop order'),
-          (Icons.redeem_rounded, 'Use them your way', 'Ask for a discount on a treatment, on shop products or something else — right here in the app'),
-        ])
-          Padding(padding: const EdgeInsets.only(bottom: 10), child: LvCard(child: Row(children: [IconBox(i), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t, style: const TextStyle(fontWeight: FontWeight.w500)), Muted(s, size: 12.5)]))]))),
-        const SizedBox(height: 6),
-        const Banner2(text: Text('Once reception enrols you, your points appear here automatically.')),
-        const SizedBox(height: 16),
-        LvButton('My gift cards${giftTotal > 0 ? ' · ${etb(giftTotal)}' : ''}', kind: BtnKind.ghost, icon: Icons.card_giftcard_rounded, onTap: () => context.push('/gift-cards')),
-      ]);
+  State<_JoinView> createState() => _JoinViewState();
+}
+
+class _JoinViewState extends State<_JoinView> {
+  bool busy = false;
+
+  Future<void> _ask() async {
+    final note = await promptText(context, title: 'Ask to join Lavish Rewards', hint: 'Anything reception should know? (optional)', ok: 'Send request', maxLines: 2);
+    if (note == null || !mounted) return;
+    setState(() => busy = true);
+    try {
+      await api.post('/client/rewards/join', {if (note.trim().isNotEmpty) 'note': note.trim()});
+      if (mounted) toast(context, 'Request sent — Lavish will enrol you and let you know');
+      await widget.onChanged();
+    } catch (e) {
+      if (mounted) showError(context, e);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final requested = widget.rw.str('requested_at').isNotEmpty;
+    final declined = widget.rw.str('declined_reason');
+    return ListView(padding: const EdgeInsets.all(20), children: [
+      TealHeader(
+        radius: 24,
+        padding: const EdgeInsets.all(22),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.workspace_premium_rounded, color: C.gold, size: 36),
+          const SizedBox(height: 12),
+          Text('Lavish Rewards', style: serif(30, color: Colors.white)),
+          const SizedBox(height: 6),
+          const Text('Collect points on your treatments and shop orders, and use them for a discount. Joining is free — ask here or at the Lavish front desk.',
+              style: TextStyle(color: C.mint, height: 1.5)),
+        ]),
+      ),
+      const SizedBox(height: 16),
+      if (requested)
+        Banner2(tone: Tone.gold, icon: Icons.hourglass_top_rounded, text: Text('Request sent ${dayLong(widget.rw.str('requested_at'))}. Lavish will enrol you and let you know.'))
+      else ...[
+        if (declined.isNotEmpty) ...[
+          Banner2(tone: Tone.warn, icon: Icons.info_outline_rounded, text: Text('Your last request wasn’t approved: $declined')),
+          const SizedBox(height: 10),
+        ],
+        LvButton('Ask to join', icon: Icons.how_to_reg_rounded, kind: BtnKind.gold, busy: busy, onTap: _ask),
+      ],
+      const SizedBox(height: 16),
+      for (final (i, t, s) in [
+        (Icons.how_to_reg_rounded, 'Ask to join', 'Tap “Ask to join” or tell the front desk — reception enrols you'),
+        (Icons.stars_rounded, 'Collect points', 'On every completed, paid treatment and shop order'),
+        (Icons.redeem_rounded, 'Use them your way', 'Ask for a discount on a treatment, on shop products or something else — right here in the app'),
+      ])
+        Padding(padding: const EdgeInsets.only(bottom: 10), child: LvCard(child: Row(children: [IconBox(i), const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(t, style: const TextStyle(fontWeight: FontWeight.w500)), Muted(s, size: 12.5)]))]))),
+      const SizedBox(height: 6),
+      LvButton('My gift cards${widget.giftTotal > 0 ? ' · ${etb(widget.giftTotal)}' : ''}', kind: BtnKind.ghost, icon: Icons.card_giftcard_rounded, onTap: () => context.push('/gift-cards')),
+    ]);
+  }
 }
 
 // ---------------------------------------------------------------- use my points
