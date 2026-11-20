@@ -193,9 +193,9 @@ class HomeScreen extends StatelessWidget {
                           (Icons.calendar_month_rounded, 'Book', '/book'),
                           (Icons.event_note_rounded, 'Visits', '/appointments'),
                           (Icons.receipt_long_rounded, 'Payments', '/payments'),
-                          (Icons.support_agent_rounded, 'Help', '/complaints'),
+                          (Icons.card_giftcard_rounded, 'Gift cards', '/gift-cards'),
                         ])
-                          Expanded(child: _Tile(icon: icon, label: label, onTap: () => context.push(to))),
+                          Expanded(child: _Tile(icon: icon, label: label, bold: to == '/gift-cards', onTap: () => context.push(to))),
                       ]),
                       if (online != null) ...[
                         const SizedBox(height: 20),
@@ -354,7 +354,7 @@ class _RewardsStrip extends StatelessWidget {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Muted(member ? '${rw.obj('tier').str('name', 'Glow')} · Lavish Rewards' : 'Lavish Rewards', size: 12),
-            Text(member ? '${number(rw['points_balance'] as num?)} points' : 'Ask at reception to join', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+            Text(member ? '${number(rw['points_balance'] as num?)} points' : 'Become a member — it’s free', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
           ]),
         ),
         if (member && open > 0) Pill('$open request${open == 1 ? '' : 's'} open', tone: Tone.gold),
@@ -365,10 +365,11 @@ class _RewardsStrip extends StatelessWidget {
 }
 
 class _Tile extends StatelessWidget {
-  const _Tile({required this.icon, required this.label, required this.onTap});
+  const _Tile({required this.icon, required this.label, required this.onTap, this.bold = false});
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool bold; // highlighted (Gift cards)
   @override
   Widget build(BuildContext context) => InkWell(
         onTap: onTap,
@@ -377,11 +378,17 @@ class _Tile extends StatelessWidget {
           Container(
             width: 60,
             height: 60,
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: C.line)),
-            child: Icon(icon, color: C.dark, size: 26),
+            decoration: BoxDecoration(
+              color: bold ? null : Colors.white,
+              gradient: bold ? const LinearGradient(colors: [C.gold, Color(0xFF9C735C)], begin: Alignment.topLeft, end: Alignment.bottomRight) : null,
+              borderRadius: BorderRadius.circular(20),
+              border: bold ? null : Border.all(color: C.line),
+              boxShadow: bold ? [BoxShadow(color: C.gold.withValues(alpha: .45), blurRadius: 14, offset: const Offset(0, 6), spreadRadius: -6)] : null,
+            ),
+            child: Icon(icon, color: bold ? Colors.white : C.dark, size: 26),
           ),
           const SizedBox(height: 7),
-          Text(label, style: const TextStyle(fontSize: 12)),
+          Text(label, style: TextStyle(fontSize: 12, fontWeight: bold ? FontWeight.w700 : FontWeight.w400, color: bold ? C.ink : null)),
         ]),
       );
 }

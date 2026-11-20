@@ -217,7 +217,36 @@ class GiftCardScreen extends StatelessWidget {
               ]),
             ),
             const SizedBox(height: 12),
-            const Banner2(icon: Icons.info_outline_rounded, text: Text('At your visit, show the barcode (or the printed card) at the front desk — reception scans it and uses it for your treatment.')),
+            if (c['mine'] == 'received' && c.str('status') == 'active' && c.integer('balance') > 0) ...[
+              LvCard(
+                color: const Color(0xFFF2F8F7),
+                borderColor: C.mint,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Row(children: [
+                    Icon(Icons.phone_iphone_rounded, color: C.tealDeep),
+                    SizedBox(width: 8),
+                    Text('Use it online', style: TextStyle(fontWeight: FontWeight.w600, color: C.tealDeep)),
+                  ]),
+                  const SizedBox(height: 6),
+                  Text(c.str('type') == 'service'
+                      ? 'Book ${c.obj('service').str('name', 'your treatment')} in the app and choose this card on the booking summary — it covers the treatment.'
+                      : 'Choose this card when you book a treatment, or on any bill under Payments (treatments and shop orders). It pays as much as its balance covers; you pay the rest.',
+                      style: const TextStyle(fontSize: 13, height: 1.4)),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(child: LvButton('Book', small: true, icon: Icons.calendar_month_rounded, onTap: () => context.push('/book'))),
+                    if (c.str('type') != 'service') ...[
+                      const SizedBox(width: 8),
+                      Expanded(child: LvButton('Shop', small: true, kind: BtnKind.ghost, icon: Icons.shopping_bag_outlined, onTap: () => context.go('/shop'))),
+                      const SizedBox(width: 8),
+                      Expanded(child: LvButton('Pay a bill', small: true, kind: BtnKind.ghost, icon: Icons.receipt_long_rounded, onTap: () => context.push('/payments'))),
+                    ],
+                  ]),
+                ]),
+              ),
+              const SizedBox(height: 12),
+            ],
+            const Banner2(icon: Icons.info_outline_rounded, text: Text('At the clinic, show the QR code (or the printed card) at the front desk — reception scans it and uses it for your treatment.')),
             if (c.list('ledger').isNotEmpty) ...[
               const SectionTitle('History'),
               LvList(children: [
