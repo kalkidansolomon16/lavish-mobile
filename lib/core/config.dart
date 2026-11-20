@@ -16,5 +16,5 @@ class AppConfig {
 
   /// Shown on the Welcome and Profile screens so testers can tell which build is installed.
   /// Keep in step with `version:` in pubspec.yaml.
-  static const build = 11;
+  static const build = 15;
 }
